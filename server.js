@@ -1461,7 +1461,7 @@ app.get('/api/debug-ldrausers-all', async (req, res) => {
 // In production: serve React for any non-API route (client-side routing)
 // MUST be registered AFTER all /api/* routes
 if (IS_PROD) {
-  app.get('*', (_req, res) => {
+  app.get('/{*path}', (_req, res) => {
     res.sendFile(path.join(__dirname, 'build', 'index.html'));
   });
 }
