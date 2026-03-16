@@ -221,7 +221,7 @@ const NewRequest: React.FC<NewRequestProps> = ({ onBack, onSubmitSuccess, userEm
           {/* Show existing file link in edit mode */}
           {isEdit && existingRequest!.documentUrl && !file && (
             <a
-              href={existingRequest!.documentUrl}
+              href={`${existingRequest!.documentUrl}?web=1`}
               target="_blank"
               rel="noreferrer"
               style={styles.existingFileLink}

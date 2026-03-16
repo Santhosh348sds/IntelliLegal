@@ -20,13 +20,6 @@ interface Props {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function formatBytes(bytes: number): string {
-  if (!bytes) return '—';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
-}
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return '—';
@@ -337,19 +330,13 @@ const RequestDetail: React.FC<Props> = ({ requestTitle, onBack }) => {
                   <div style={S.docActions}>
                     {request.documentUrl && (
                     <a
-                      href={request.documentUrl}
+                      href={`${request.documentUrl}?web=1`}
                       target="_blank"
                       rel="noopener noreferrer"
                       style={S.viewLink}
                     >
                       View Document
                     </a>
-                    )}
-                    {(status === 'Reprogress' || status === 'Re-Progress') && (
-                      <span style={S.actionDot}> · </span>
-                    )}
-                    {(status === 'Reprogress' || status === 'Re-Progress') && (
-                      <span style={S.uploadLink}>Upload Revision</span>
                     )}
                   </div>
                 </div>
