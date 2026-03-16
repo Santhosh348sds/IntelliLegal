@@ -1045,8 +1045,6 @@ app.post('/api/create-request', async (req, res) => {
         Title: requestTitle,
         CustomerName: requestData.customerName,
         CustomerType: 'New Customer',
-        OpportunityValue: requestData.opportunityValue,
-        Priority: requestData.priority,
         DocumentType: requestData.documentType,
         OtherDocType: 'NA',
         Status: 'New',
@@ -1056,17 +1054,12 @@ app.post('/api/create-request', async (req, res) => {
         AIProcessed: false,
         LastStatusChange: new Date().toISOString(),
         VersionNumber: 1,
-        
-        // Simple email-based assignment
         RequesterEmail: userEmail,
-        AssignedApproverEmail: requestData.approverEmail,
         DocumentUrl: requestData.fileUrl
       }
     };
     
-    console.log('[API] Using simple email-based assignment');
     console.log('[API] RequesterEmail:', userEmail);
-    console.log('[API] AssignedApproverEmail:', requestData.approverEmail);
     console.log('[API] DocumentUrl:', requestData.fileUrl);
     console.log('[API] Final payload:', JSON.stringify(createPayload, null, 2));
 
@@ -1100,6 +1093,63 @@ app.post('/api/create-request', async (req, res) => {
     
     res.status(500).json({ 
       error: err.response?.data?.error?.message || err.message 
+    });
+  }
+});
+
+
+// PUT /api/update-request/:requestTitle  — resubmit a Re-Progress request
+app.put('/api/update-request/:requestTitle', async (req, res) => {
+  const { requestTitle } = req.params;
+  const { customerName, documentType, businessBackground, remarks, fileId, fileUrl } = req.body;
+  console.log('[API] PUT /api/update-request/' + requestTitle);
+
+  try {
+    const token = await getAccessToken();
+
+    // Find the list item by Title
+    const findResp = await axios.get(
+      `https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists/${LDRA_REQUESTS_LIST}/items` +
+        `?$expand=fields&$filter=fields/Title eq '${requestTitle}'`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Prefer: 'HonorNonIndexedQueriesWarningMayFailRandomly',
+        },
+      }
+    );
+
+    if (!findResp.data.value.length) {
+      return res.status(404).json({ error: `Request '${requestTitle}' not found` });
+    }
+
+    const itemId = findResp.data.value[0].id;
+
+    // Build update payload — only include file fields if a new file was uploaded
+    const fields = {
+      CustomerName: customerName,
+      DocumentType: documentType,
+      FuturePotential: businessBackground,
+      Remarks: remarks || '',
+      Status: 'Pending',
+      LastStatusChange: new Date().toISOString(),
+    };
+
+    if (fileId) fields.FileID = fileId;
+    if (fileUrl) fields.DocumentUrl = fileUrl;
+
+    await axios.patch(
+      `https://graph.microsoft.com/v1.0/sites/${SITE_ID}/lists/${LDRA_REQUESTS_LIST}/items/${itemId}/fields`,
+      fields,
+      { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } }
+    );
+
+    console.log('[API] Request updated to Pending:', requestTitle);
+    res.json({ success: true, requestTitle });
+  } catch (err) {
+    console.error('[API] Error updating request:', err.response?.data || err.message);
+    res.status(err.response?.status || 500).json({
+      error: err.response?.data?.error?.message || err.message,
     });
   }
 });

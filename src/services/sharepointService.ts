@@ -211,15 +211,11 @@ export interface UploadResult {
 export interface CreateRequestData {
   customerName: string;
   documentType: string;
-  priority: string;
-  opportunityValue: number;
   businessBackground: string;
   remarks: string;
   fileId: string;
   fileUrl: string;
-  fileName?: string;        // ADD
-  // approverUserId?: string;  // ADD
-  approverEmail?: string; 
+  fileName?: string;
   userEmail: string;
   userName: string;
 }
@@ -255,6 +251,23 @@ export async function createRequest(data: CreateRequestData): Promise<CreateRequ
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data)
+  });
+}
+
+export interface UpdateRequestData {
+  customerName: string;
+  documentType: string;
+  businessBackground: string;
+  remarks: string;
+  fileId?: string;
+  fileUrl?: string;
+}
+
+export async function updateRequest(requestTitle: string, data: UpdateRequestData): Promise<{ success: boolean; requestTitle: string }> {
+  return apiCall(`/api/update-request/${encodeURIComponent(requestTitle)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
   });
 }
 

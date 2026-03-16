@@ -62,17 +62,20 @@ const Home: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const [currentView, setCurrentView] = useState<"home" | "newRequest">("home");
   const [selectedReq, setSelectedReq] = useState<string | null>(null); // requestTitle
+  const [resubmitReq, setResubmitReq] = useState<LdraRequest | null>(null);
+  const [refreshKey,  setRefreshKey]  = useState(0);
 
   // ── Data loading ───────────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!userEmail) return;
     setLoading(true);
+    setFetchError(null);
     fetchMyRequests(userEmail)
       .then((data) => { setRequests(data); })
       .catch((err: Error) => setFetchError(err.message))
       .finally(() => setLoading(false));
-  }, [userEmail]);
+  }, [userEmail, refreshKey]);
 
   useEffect(() => { setCurrentPage(1); }, [requests]);
 
@@ -85,13 +88,24 @@ const Home: React.FC = () => {
 
   // ── Navigation ─────────────────────────────────────────────────────────────
 
-  const handleNewRequest = () => setCurrentView("newRequest");
-  const handleBackToHome = () => { setCurrentView("home"); setSelectedReq(null); };
+  const handleNewRequest = () => { setResubmitReq(null); setCurrentView("newRequest"); };
+  const handleBackToHome = () => { setCurrentView("home"); setSelectedReq(null); setResubmitReq(null); };
+  const handleResubmit   = (req: LdraRequest) => { setResubmitReq(req); setCurrentView("newRequest"); };
+  // Called only after a successful submit/resubmit — re-fetches the list
+  const handleSubmitSuccess = () => { setRefreshKey((k) => k + 1); handleBackToHome(); };
 
   // ── Views ──────────────────────────────────────────────────────────────────
 
   if (currentView === "newRequest") {
-    return <NewRequest onBack={handleBackToHome} userEmail={userEmail} userName={userName} />;
+    return (
+      <NewRequest
+        onBack={handleBackToHome}
+        onSubmitSuccess={handleSubmitSuccess}
+        userEmail={userEmail}
+        userName={userName}
+        existingRequest={resubmitReq ?? undefined}
+      />
+    );
   }
 
   if (selectedReq) {
@@ -163,7 +177,7 @@ const Home: React.FC = () => {
               <table style={styles.table}>
                 <thead>
                   <tr>
-                    {["Request ID", "Customer Name", "Document Type", "Priority", "Status", "Last Updated"].map((col) => (
+                    {["Request ID", "Customer Name", "Document Type", "Priority", "Status", "Last Updated", "Actions"].map((col) => (
                       <th key={col} style={styles.th}>{col}</th>
                     ))}
                   </tr>
@@ -191,6 +205,16 @@ const Home: React.FC = () => {
                       </td>
                       <td style={{ ...styles.td, color: "#9ca3af", fontSize: 13 }}>
                         {formatDate(req.lastStatusChange)}
+                      </td>
+                      <td style={styles.td}>
+                        {(req.status === "Re-Progress" || req.status === "Reprogress") && (
+                          <button
+                            style={styles.resubmitBtn}
+                            onClick={() => handleResubmit(req)}
+                          >
+                            Resubmit
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -332,6 +356,18 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "left" as const,
     textDecoration: "underline",
     textUnderlineOffset: 2,
+  },
+
+  resubmitBtn: {
+    padding: "5px 14px",
+    fontSize: 12,
+    fontWeight: 600,
+    borderRadius: 6,
+    border: "1.5px solid #d97706",
+    background: "#fffbeb",
+    color: "#d97706",
+    cursor: "pointer",
+    whiteSpace: "nowrap" as const,
   },
 
   priorityPill: {

@@ -1,120 +1,59 @@
-// pages/NewRequest.tsx - COMPLETE REPLACEMENT
-import React, { useState, useEffect } from "react";
+// pages/NewRequest.tsx
+import React, { useState } from "react";
+import { LdraRequest } from "../types";
 import {
-  getApprovers,
-  checkUser,
   uploadDocument,
   createRequest,
+  updateRequest,
   CreateRequestData,
 } from "../services/sharepointService";
-import { Approver } from "../types";
 
 interface NewRequestProps {
   onBack: () => void;
+  onSubmitSuccess?: () => void; // called after successful submit — triggers dashboard refresh
   userEmail: string;
   userName: string;
+  existingRequest?: LdraRequest; // when provided → resubmit/edit mode
 }
 
-// Document type options
 const DOC_TYPES = [
   { value: "NDA", label: "NDA", color: "#7C3AED", bg: "#EDE9FE" },
   { value: "MSA", label: "MSA", color: "#4F46E5", bg: "#E0E7FF" },
 ];
 
-// Priority options
-const PRIORITIES = [
-  { value: "High", label: "High", color: "#DC2626", bg: "#FEE2E2" },
-  { value: "Medium", label: "Medium", color: "#D97706", bg: "#FEF3C7" },
-  { value: "Low", label: "Low", color: "#16A34A", bg: "#DCFCE7" },
-];
+const NewRequest: React.FC<NewRequestProps> = ({ onBack, onSubmitSuccess, userEmail, userName, existingRequest }) => {
+  const isEdit = !!existingRequest;
 
-const NewRequest: React.FC<NewRequestProps> = ({
-  onBack,
-  userEmail,
-  userName,
-}) => {
-  // State
-  const [loading, setLoading] = useState(true);
+  // Find the latest Re-Progress comment from the approver to show as a notice
+  const approverNotice = isEdit
+    ? [...(existingRequest!.approverHistory ?? [])]
+        .reverse()
+        .find((h) => h.status === "Re-Progress" || h.status === "Reprogress")
+    : undefined;
+
   const [submitting, setSubmitting] = useState(false);
-  const [approvers, setApprovers] = useState<Approver[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // Form state
-  const [customerName, setCustomerName] = useState("");
-  const [documentType, setDocumentType] = useState("NDA");
-  const [priority, setPriority] = useState("Medium");
-  const [opportunityValue, setOpportunityValue] = useState("");
-  const [businessBackground, setBusinessBackground] = useState("");
-  const [remarks, setRemarks] = useState("");
-  const [selectedApprover, setSelectedApprover] = useState("");
+  const [customerName, setCustomerName] = useState(existingRequest?.customerName ?? "");
+  const [documentType, setDocumentType] = useState(existingRequest?.documentType ?? "NDA");
+  const [businessBackground, setBusinessBackground] = useState(existingRequest?.futurePotential ?? "");
+  const [remarks, setRemarks] = useState(existingRequest?.remarks ?? "");
   const [file, setFile] = useState<File | null>(null);
 
-  // Validation state
-  const [validationErrors, setValidationErrors] = useState<
-    Record<string, string>
-  >({});
+  const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [showConfirm, setShowConfirm] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [requestTitle, setRequestTitle] = useState("");
-
-  useEffect(() => {
-    loadInitialData();
-  }, []);
-
-  const loadInitialData = async () => {
-    try {
-      setLoading(true);
-      console.log("[NewRequest] Loading approvers");
-      const approversList = await getApprovers();
-      setApprovers(approversList);
-
-      // Auto-select if only one approver
-      if (approversList.length === 1) {
-        setSelectedApprover(approversList[0].id);
-      }
-    } catch (err: any) {
-      console.error("[NewRequest] Error:", err);
-      setError(err.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Format Indian number
-  const formatIndianNumber = (value: string): string => {
-    const num = value.replace(/\D/g, "");
-    if (!num) return "";
-    const lastThree = num.slice(-3);
-    const rest = num.slice(0, -3);
-    if (rest) {
-      const formattedRest = rest.replace(/\B(?=(\d{2})+(?!\d))/g, ",");
-      return `${formattedRest},${lastThree}`;
-    }
-    return lastThree;
-  };
-
-  const handleOpportunityChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const formatted = formatIndianNumber(e.target.value);
-    setOpportunityValue(formatted);
-  };
+  const [requestTitle, setRequestTitle] = useState(existingRequest?.title ?? "");
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
-      // Check if it's a .docx file
       if (!selectedFile.name.endsWith(".docx")) {
-        setValidationErrors({
-          ...validationErrors,
-          file: "Only .docx files are allowed",
-        });
+        setValidationErrors({ ...validationErrors, file: "Only .docx files are allowed" });
         return;
       }
-      // Check size (10MB limit)
       if (selectedFile.size > 10 * 1024 * 1024) {
-        setValidationErrors({
-          ...validationErrors,
-          file: "File must be smaller than 10MB",
-        });
+        setValidationErrors({ ...validationErrors, file: "File must be smaller than 10MB" });
         return;
       }
       setFile(selectedFile);
@@ -124,23 +63,17 @@ const NewRequest: React.FC<NewRequestProps> = ({
 
   const validate = (): boolean => {
     const errors: Record<string, string> = {};
-
     if (!customerName.trim()) errors.customerName = "Customer name is required";
-    if (!opportunityValue)
-      errors.opportunityValue = "Opportunity value is required";
-    if (!businessBackground.trim())
-      errors.businessBackground = "Business background is required";
+    if (!businessBackground.trim()) errors.businessBackground = "Business background is required";
     if (businessBackground.trim().length < 100)
       errors.businessBackground = "Minimum 100 characters required";
-    if (!file) errors.file = "Please upload a document";
-    if (approvers.length > 1 && !selectedApprover)
-      errors.approver = "Please select an approver";
-
+    // File required only for new requests; optional on resubmit (keep existing)
+    if (!isEdit && !file) errors.file = "Please upload a document";
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     if (!validate()) return;
     setShowConfirm(true);
   };
@@ -148,43 +81,49 @@ const NewRequest: React.FC<NewRequestProps> = ({
   const confirmSubmit = async () => {
     setShowConfirm(false);
     setSubmitting(true);
-
     try {
-      // Step 1: Upload file
-      console.log("[NewRequest] Uploading file");
-      const uploadResult = await uploadDocument(file!);
-      console.log("[NewRequest] File uploaded:", uploadResult);
+      let fileId: string | undefined;
+      let fileUrl: string | undefined;
+      let fileName: string | undefined;
 
-      // In confirmSubmit function, update requestData:
-      const requestData: CreateRequestData = {
-        customerName,
-        documentType,
-        priority,
-        opportunityValue: parseInt(opportunityValue.replace(/,/g, ""), 10),
-        businessBackground,
-        remarks,
-        fileId: uploadResult.fileId,
-        fileUrl: uploadResult.fileUrl,
-        fileName: uploadResult.fileName,
-        // approverUserId: selectedApprover || approvers[0]?.userId,  // ADD
-        approverEmail:
-          approvers.find((a) => a.id === selectedApprover)?.email ||
-          approvers[0]?.email,
-        userEmail,
-        userName,
-      };
+      // Upload new file only if one was selected
+      if (file) {
+        const uploadResult = await uploadDocument(file);
+        fileId = uploadResult.fileId;
+        fileUrl = uploadResult.fileUrl;
+        fileName = uploadResult.fileName;
+      }
 
-      console.log("[NewRequest] Creating request");
-      const result = await createRequest(requestData);
-      console.log("[NewRequest] Request created:", result);
+      if (isEdit) {
+        // Resubmit: update existing request → status becomes Pending
+        await updateRequest(existingRequest!.title, {
+          customerName,
+          documentType,
+          businessBackground,
+          remarks,
+          fileId,
+          fileUrl,
+        });
+        setRequestTitle(existingRequest!.title);
+      } else {
+        // New request
+        const requestData: CreateRequestData = {
+          customerName,
+          documentType,
+          businessBackground,
+          remarks,
+          fileId: fileId!,
+          fileUrl: fileUrl!,
+          fileName,
+          userEmail,
+          userName,
+        };
+        const result = await createRequest(requestData);
+        setRequestTitle(result.requestTitle);
+      }
 
-      setRequestTitle(result.requestTitle);
       setShowSuccess(true);
-
-      // Redirect after 2 seconds
-      setTimeout(() => {
-        onBack();
-      }, 2000);
+      setTimeout(() => { (onSubmitSuccess ?? onBack)(); }, 2000);
     } catch (err: any) {
       console.error("[NewRequest] Submit error:", err);
       setError(err.message);
@@ -192,17 +131,11 @@ const NewRequest: React.FC<NewRequestProps> = ({
     }
   };
 
-  if (loading) {
-    return <div style={styles.container}>Loading...</div>;
-  }
-
   if (error && !submitting) {
     return (
       <div style={styles.container}>
-        <div style={styles.error}>Error: {error}</div>
-        <button onClick={onBack} style={styles.backBtn}>
-          Back to Home
-        </button>
+        <div style={styles.errorBox}>Error: {error}</div>
+        <button onClick={onBack} style={styles.backBtn}>Back to Home</button>
       </div>
     );
   }
@@ -211,138 +144,91 @@ const NewRequest: React.FC<NewRequestProps> = ({
     <div style={styles.container}>
       {/* Header */}
       <div style={styles.header}>
-        <button onClick={onBack} style={styles.backBtn}>
-          ← Back
-        </button>
-        <h1 style={styles.title}>Legal Documentation Form</h1>
+        <button onClick={onBack} style={styles.backBtn}>← Back</button>
+        <h1 style={styles.title}>
+          {isEdit ? `Resubmit Request — ${existingRequest!.title}` : "Legal Documentation Form"}
+        </h1>
       </div>
 
       {/* Form Card */}
       <div style={styles.formCard}>
-        {/* Customer Name & Approver Row */}
-        <div style={styles.formRow}>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>
-              Customer Name <span style={styles.required}>*</span>
-            </label>
-            <input
-              type="text"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="Search or enter customer name"
-              style={styles.input}
-            />
-            {validationErrors.customerName && (
-              <span style={styles.errorText}>
-                {validationErrors.customerName}
-              </span>
-            )}
-          </div>
 
-          <div style={styles.formGroup}>
-            <label style={styles.label}>
-              Approver ({approvers.length})
-              {approvers.length > 1 && <span style={styles.required}>*</span>}
-            </label>
-            <select
-              value={selectedApprover}
-              onChange={(e) => setSelectedApprover(e.target.value)}
-              disabled={approvers.length === 1}
-              style={styles.select}
-            >
-              {approvers.length > 1 && (
-                <option value="">Select an approver</option>
-              )}
-              {approvers.map((approver) => (
-                <option key={approver.id} value={approver.id}>
-                  {approver.title} ({approver.email})
-                </option>
-              ))}
-            </select>
-            {validationErrors.approver && (
-              <span style={styles.errorText}>{validationErrors.approver}</span>
-            )}
+        {/* Approver comment notice — shown only in resubmit mode */}
+        {isEdit && approverNotice && (
+          <div style={styles.approverNotice}>
+            <div style={styles.approverNoticeHeader}>
+              <span style={styles.approverNoticeIcon}>💬</span>
+              <strong>Reviewer's Comment</strong>
+              <span style={styles.approverNoticeDate}>
+                {new Date(approverNotice.timestamp).toLocaleDateString("en-US", {
+                  year: "numeric", month: "short", day: "numeric",
+                })}
+              </span>
+            </div>
+            <p style={styles.approverNoticeComment}>{approverNotice.comment}</p>
+            <span style={styles.approverNoticeBy}>— {approverNotice.approver}</span>
           </div>
+        )}
+
+        {/* Customer Name */}
+        <div style={styles.formGroup}>
+          <label style={styles.label}>
+            Customer Name <span style={styles.required}>*</span>
+          </label>
+          <input
+            type="text"
+            value={customerName}
+            onChange={(e) => setCustomerName(e.target.value)}
+            placeholder="Enter customer name"
+            style={styles.input}
+          />
+          {validationErrors.customerName && (
+            <span style={styles.errorText}>{validationErrors.customerName}</span>
+          )}
         </div>
 
-        {/* Document Type & Priority Row */}
-        <div style={styles.formRow}>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>
-              Document Type <span style={styles.required}>*</span>
-            </label>
-            <div style={styles.pillGroup}>
-              {DOC_TYPES.map((doc) => (
-                <button
-                  key={doc.value}
-                  type="button"
-                  onClick={() => setDocumentType(doc.value)}
-                  style={{
-                    ...styles.pill,
-                    backgroundColor:
-                      documentType === doc.value ? doc.bg : "#F3F4F6",
-                    color: documentType === doc.value ? doc.color : "#6B7280",
-                    borderColor:
-                      documentType === doc.value ? doc.color : "transparent",
-                  }}
-                >
-                  {doc.label}
-                </button>
-              ))}
-            </div>
+        {/* Document Type */}
+        <div style={styles.formGroup}>
+          <label style={styles.label}>
+            Document Type <span style={styles.required}>*</span>
+          </label>
+          <div style={styles.pillGroup}>
+            {DOC_TYPES.map((doc) => (
+              <button
+                key={doc.value}
+                type="button"
+                onClick={() => setDocumentType(doc.value)}
+                style={{
+                  ...styles.pill,
+                  backgroundColor: documentType === doc.value ? doc.bg : "#F3F4F6",
+                  color: documentType === doc.value ? doc.color : "#6B7280",
+                  borderColor: documentType === doc.value ? doc.color : "transparent",
+                }}
+              >
+                {doc.label}
+              </button>
+            ))}
           </div>
-
-          <div style={styles.formGroup}>
-            <label style={styles.label}>
-              Priority <span style={styles.required}>*</span>
-            </label>
-            <div style={styles.pillGroup}>
-              {PRIORITIES.map((p) => (
-                <button
-                  key={p.value}
-                  type="button"
-                  onClick={() => setPriority(p.value)}
-                  style={{
-                    ...styles.pill,
-                    backgroundColor: priority === p.value ? p.bg : "#F3F4F6",
-                    color: priority === p.value ? p.color : "#6B7280",
-                    borderColor: priority === p.value ? p.color : "transparent",
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Opportunity Value Row */}
-        <div style={styles.formRow}>
-          <div style={styles.formGroup}>
-            <label style={styles.label}>
-              Opportunity Value <span style={styles.required}>*</span>
-            </label>
-            <input
-              type="text"
-              value={opportunityValue}
-              onChange={handleOpportunityChange}
-              placeholder="Enter opportunity value"
-              style={styles.input}
-            />
-            {validationErrors.opportunityValue && (
-              <span style={styles.errorText}>
-                {validationErrors.opportunityValue}
-              </span>
-            )}
-          </div>
-          <div style={styles.formGroup}>{/* Empty for layout */}</div>
         </div>
 
         {/* File Upload */}
         <div style={styles.formGroup}>
           <label style={styles.label}>
-            Attach document for review <span style={styles.required}>*</span>
+            Attach document for review{" "}
+            {!isEdit && <span style={styles.required}>*</span>}
+            {isEdit && <span style={styles.optionalHint}> (leave empty to keep existing)</span>}
           </label>
+          {/* Show existing file link in edit mode */}
+          {isEdit && existingRequest!.documentUrl && !file && (
+            <a
+              href={existingRequest!.documentUrl}
+              target="_blank"
+              rel="noreferrer"
+              style={styles.existingFileLink}
+            >
+              📄 Current document (click to view)
+            </a>
+          )}
           <div style={styles.uploadArea}>
             <input
               type="file"
@@ -352,9 +238,7 @@ const NewRequest: React.FC<NewRequestProps> = ({
               id="file-upload"
             />
             <label htmlFor="file-upload" style={styles.uploadLabel}>
-              {file
-                ? file.name
-                : "No file selected. Please upload a .docx file only."}
+              {file ? file.name : "Click to upload a new .docx file"}
               <span style={styles.uploadIcon}>📎</span>
             </label>
           </div>
@@ -375,13 +259,9 @@ const NewRequest: React.FC<NewRequestProps> = ({
             rows={4}
             style={styles.textarea}
           />
-          <div style={styles.charCount}>
-            {businessBackground.length}/2000 characters
-          </div>
+          <div style={styles.charCount}>{businessBackground.length}/2000 characters</div>
           {validationErrors.businessBackground && (
-            <span style={styles.errorText}>
-              {validationErrors.businessBackground}
-            </span>
+            <span style={styles.errorText}>{validationErrors.businessBackground}</span>
           )}
         </div>
 
@@ -391,23 +271,17 @@ const NewRequest: React.FC<NewRequestProps> = ({
           <textarea
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
-            placeholder="Enter description for Remark"
+            placeholder="Enter remarks (optional)"
             rows={3}
             style={styles.textarea}
           />
         </div>
 
-        {/* Form Actions */}
+        {/* Actions */}
         <div style={styles.formActions}>
-          <button onClick={onBack} style={styles.cancelButton}>
-            Cancel
-          </button>
-          <button
-            onClick={handleSubmit}
-            disabled={submitting}
-            style={styles.submitButton}
-          >
-            {submitting ? "Submitting..." : "Submit"}
+          <button onClick={onBack} style={styles.cancelButton}>Cancel</button>
+          <button onClick={handleSubmit} disabled={submitting} style={styles.submitButton}>
+            {submitting ? "Submitting..." : isEdit ? "Resubmit" : "Submit"}
           </button>
         </div>
       </div>
@@ -416,17 +290,16 @@ const NewRequest: React.FC<NewRequestProps> = ({
       {showConfirm && (
         <div style={styles.modalOverlay}>
           <div style={styles.modal}>
-            <h3>Confirm Submit</h3>
-            <p>Are you sure? You are about to submit the form.</p>
+            <h3>{isEdit ? "Confirm Resubmit" : "Confirm Submit"}</h3>
+            <p>
+              {isEdit
+                ? `Resubmit ${existingRequest!.title}? The status will change to "Pending".`
+                : "Are you sure? You are about to submit the form."}
+            </p>
             <div style={styles.modalActions}>
-              <button
-                onClick={() => setShowConfirm(false)}
-                style={styles.cancelButton}
-              >
-                Cancel
-              </button>
+              <button onClick={() => setShowConfirm(false)} style={styles.cancelButton}>Cancel</button>
               <button onClick={confirmSubmit} style={styles.submitButton}>
-                Yes, Submit
+                {isEdit ? "Yes, Resubmit" : "Yes, Submit"}
               </button>
             </div>
           </div>
@@ -438,8 +311,14 @@ const NewRequest: React.FC<NewRequestProps> = ({
         <div style={styles.modalOverlay}>
           <div style={styles.modal}>
             <div style={styles.successIcon}>✓</div>
-            <h3 style={styles.successTitle}>Success!</h3>
-            <p>Your request {requestTitle} has been submitted successfully.</p>
+            <h3 style={styles.successTitle}>
+              {isEdit ? "Resubmitted!" : "Success!"}
+            </h3>
+            <p>
+              {isEdit
+                ? `Request ${requestTitle} has been resubmitted successfully.`
+                : `Your request ${requestTitle} has been submitted successfully.`}
+            </p>
           </div>
         </div>
       )}
@@ -447,13 +326,11 @@ const NewRequest: React.FC<NewRequestProps> = ({
   );
 };
 
-// Styles
 const styles: Record<string, React.CSSProperties> = {
   container: {
     padding: 24,
     minHeight: "100vh",
-    background:
-      "linear-gradient(180deg, rgba(51, 216, 158, 0.24) 9.45%, rgba(54, 136, 136, 0.06) 100%)",
+    background: "linear-gradient(180deg, rgba(51, 216, 158, 0.24) 9.45%, rgba(54, 136, 136, 0.06) 100%)",
   },
   header: {
     display: "flex",
@@ -465,7 +342,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "8px 12px",
     borderRadius: "50%",
     border: "none",
-    background: "#fff",
+    background: "transparent",
     cursor: "pointer",
     fontSize: 16,
   },
@@ -479,13 +356,10 @@ const styles: Record<string, React.CSSProperties> = {
     background: "#fff",
     borderRadius: 8,
     padding: 24,
-    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.1)",
-  },
-  formRow: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 40,
-    marginBottom: 24,
+    boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+    display: "flex",
+    flexDirection: "column",
+    gap: 24,
   },
   formGroup: {
     display: "flex",
@@ -501,18 +375,16 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#ef4444",
     marginLeft: 2,
   },
+  optionalHint: {
+    fontSize: 12,
+    color: "#9ca3af",
+    fontWeight: 400,
+  },
   input: {
     padding: "8px 12px",
     border: "1px solid #d1d5db",
     borderRadius: 6,
     fontSize: 14,
-  },
-  select: {
-    padding: "8px 12px",
-    border: "1px solid #d1d5db",
-    borderRadius: 6,
-    fontSize: 14,
-    background: "#fff",
   },
   pillGroup: {
     display: "flex",
@@ -526,6 +398,11 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     cursor: "pointer",
     transition: "all 0.2s",
+  },
+  existingFileLink: {
+    fontSize: 13,
+    color: "#0891b2",
+    textDecoration: "underline",
   },
   uploadArea: {
     position: "relative",
@@ -549,9 +426,7 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#6b7280",
     cursor: "pointer",
   },
-  uploadIcon: {
-    fontSize: 16,
-  },
+  uploadIcon: { fontSize: 16 },
   textarea: {
     padding: "8px 12px",
     border: "1px solid #d1d5db",
@@ -568,11 +443,53 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     color: "#ef4444",
   },
+  approverNotice: {
+    background: "#fffbeb",
+    border: "1.5px solid #d97706",
+    borderRadius: 8,
+    padding: "14px 16px",
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 6,
+  },
+  approverNoticeHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: 8,
+    fontSize: 14,
+    fontWeight: 600,
+    color: "#92400e",
+  },
+  approverNoticeIcon: { fontSize: 16 },
+  approverNoticeDate: {
+    marginLeft: "auto",
+    fontSize: 12,
+    fontWeight: 400,
+    color: "#a16207",
+  },
+  approverNoticeComment: {
+    margin: 0,
+    fontSize: 14,
+    color: "#451a03",
+    lineHeight: 1.6,
+  },
+  approverNoticeBy: {
+    fontSize: 12,
+    color: "#a16207",
+    fontStyle: "italic",
+  },
+
+  errorBox: {
+    color: "#c0392b",
+    background: "#fdecea",
+    padding: 12,
+    borderRadius: 4,
+    marginBottom: 16,
+  },
   formActions: {
     display: "flex",
     justifyContent: "flex-end",
     gap: 12,
-    marginTop: 24,
     paddingTop: 24,
     borderTop: "1px solid #e5e7eb",
   },
@@ -594,11 +511,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   modalOverlay: {
     position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    background: "rgba(0, 0, 0, 0.5)",
+    top: 0, left: 0, right: 0, bottom: 0,
+    background: "rgba(0,0,0,0.5)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
@@ -631,13 +545,6 @@ const styles: Record<string, React.CSSProperties> = {
   successTitle: {
     color: "#15803d",
     marginBottom: 8,
-  },
-  error: {
-    color: "#c0392b",
-    background: "#fdecea",
-    padding: 12,
-    borderRadius: 4,
-    marginBottom: 16,
   },
 };
 
