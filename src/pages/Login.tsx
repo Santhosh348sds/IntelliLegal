@@ -63,18 +63,18 @@ const styles: Record<string, React.CSSProperties> = {
     minHeight: '100vh',
     fontFamily: "'Segoe UI', Arial, sans-serif",
     overflow: 'hidden',
-  },
+  }, 
 
   /* ── Left ── */
   leftPanel: {
-    flex: '0 0 50%',
+    flex: '0 0 50%', 
     display: 'flex',
     alignItems: 'stretch',
     overflow: 'hidden',
   },
   welcomeImg: {
     width: '100%',
-    height: '100%',
+    height: '100vh',
     objectFit: 'cover',
     objectPosition: 'center',
     display: 'block',
