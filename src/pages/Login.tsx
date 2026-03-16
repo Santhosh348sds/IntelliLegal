@@ -24,7 +24,7 @@ const Login: React.FC = () => {
         <div style={styles.card}>
           {/* Logo */}
           <div style={styles.logoRow}>
-            <svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+            {/* <svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M22 2L4 10v12c0 10.5 7.7 20.3 18 22.6C32.3 42.3 40 32.5 40 22V10L22 2z" fill="#1a6b5a"/>
               <path d="M22 2L4 10v12c0 10.5 7.7 20.3 18 22.6C32.3 42.3 40 32.5 40 22V10L22 2z" fill="url(#shieldGrad)"/>
               <defs>
@@ -35,7 +35,8 @@ const Login: React.FC = () => {
               </defs>
               <path d="M15 22l5 5 9-9" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               <circle cx="22" cy="15" r="3" fill="#fff" fillOpacity="0.3"/>
-            </svg>
+            </svg> */}
+            <img src={require('../assets/IntelliLegal Logo.png')} style={{ height: '50px', width: 'auto' }} />
             <span style={styles.brandText}>
               Intelli<span style={styles.brandAccent}>Legal</span>
             </span>

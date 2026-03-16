@@ -120,7 +120,7 @@ const Home: React.FC = () => {
       {/* ── Navbar ── */}
       <header style={styles.header}>
         <div style={styles.logoRow}>
-          <svg width="36" height="36" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+          {/* <svg width="36" height="36" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path d="M22 2L4 10v12c0 10.5 7.7 20.3 18 22.6C32.3 42.3 40 32.5 40 22V10L22 2z"
               fill="url(#shieldG2)" />
             <defs>
@@ -130,7 +130,8 @@ const Home: React.FC = () => {
               </linearGradient>
             </defs>
             <path d="M15 22l5 5 9-9" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
+          </svg> */}
+           <img src={require('../assets/IntelliLegal Logo.png')} style={{ height: '44px', width: 'auto' }} />
           <span style={styles.brandText}>
             Intelli<span style={styles.brandAccent}>Legal</span>
           </span>
